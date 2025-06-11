@@ -160,7 +160,6 @@ jobs:
 
   merge:
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
     needs: [prepare, build-amd64, build-arm64]
     permissions:
       contents: read
