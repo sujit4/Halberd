@@ -105,6 +105,7 @@ jobs:
             type=gha,mode=max,scope=linux/amd64
             type=gha,mode=max,scope=wheels-${{ needs.prepare.outputs.requirements-hash }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
+          tags: ${{ needs.prepare.outputs.tags }}
           provenance: mode=max
           sbom: true
 
@@ -153,6 +154,7 @@ jobs:
             type=gha,mode=max,scope=linux/arm64
             type=gha,mode=max,scope=wheels-${{ needs.prepare.outputs.requirements-hash }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
+          tags: ${{ needs.prepare.outputs.tags }}
           provenance: mode=max
           sbom: true
 
@@ -192,3 +194,18 @@ jobs:
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${{ needs.prepare.outputs.version }}
+
+      - name: Verify SBOM attestations
+        run: |
+          echo "Checking for SBOM attestations on final manifest..."
+          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${{ needs.prepare.outputs.version }} --format "{{json .}}" | jq '.attestations // "No attestations found on manifest"'
+          
+          echo "Checking for SBOM attestations on individual architecture images..."
+          echo "AMD64 digest: ${{ needs.build-amd64.outputs.digest }}"
+          echo "ARM64 digest: ${{ needs.build-arm64.outputs.digest }}"
+          
+          echo "AMD64 attestations:"
+          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-amd64.outputs.digest }} --format "{{json .}}" | jq '.attestations // "No attestations found"'
+          
+          echo "ARM64 attestations:"
+          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-arm64.outputs.digest }} --format "{{json .}}" | jq '.attestations // "No attestations found"'
