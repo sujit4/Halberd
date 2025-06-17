@@ -32,10 +32,7 @@ Halberd is an advanced multi-cloud attack tool designed for security teams to va
 
 ```bash
 # Pull and run the latest version
-docker run -d --name halberd -p 8050:8050 ghcr.io/vectra-ai-research/halberd:main
-
-# Access the web interface
-open http://localhost:8050
+docker run --pull always --name halberd -p 8050:8050 ghcr.io/vectra-ai-research/halberd:main
 ```
 
 ### Docker Compose
