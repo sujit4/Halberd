@@ -2,16 +2,16 @@
 Credential providers module.
 """
 
+from .aws_provider import AWSCredentialProvider
+from .azure_provider import AzureCredentialProvider
 from .base_provider import BaseCredentialProvider
 from .entra_provider import EntraCredentialProvider
-from .aws_provider import AWSCredentialProvider
 from .gcp_provider import GCPCredentialProvider
-from .azure_provider import AzureCredentialProvider
 
 __all__ = [
-    'BaseCredentialProvider',
-    'EntraCredentialProvider',
-    'AWSCredentialProvider',
-    'GCPCredentialProvider',
-    'AzureCredentialProvider'
+    "BaseCredentialProvider",
+    "EntraCredentialProvider",
+    "AWSCredentialProvider",
+    "GCPCredentialProvider",
+    "AzureCredentialProvider",
 ]

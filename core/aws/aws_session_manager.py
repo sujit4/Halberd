@@ -1,9 +1,13 @@
-import boto3
-from botocore.exceptions import ClientError
 from typing import Dict, List, Optional
 
+import boto3
+from botocore.exceptions import ClientError
+
+
 class SessionManager:
-    _sessions: Dict[str, Dict[str, boto3.Session]] = {}  # Class variable to store sessions
+    _sessions: Dict[
+        str, Dict[str, boto3.Session]
+    ] = {}  # Class variable to store sessions
 
     @classmethod
     def create_session(cls, session_name, **kwargs) -> Dict[str, str]:
@@ -17,20 +21,27 @@ class SessionManager:
         try:
             new_session = boto3.Session(**kwargs)
             # Verify the session is valid by calling STS
-            sts = new_session.client('sts')
+            sts = new_session.client("sts")
             sts.get_caller_identity()
             # Add session to session manager
-            cls._sessions[session_name] = {"session":new_session,"active_session":False}
-            
-            return {"name" : session_name, "message" : "New session created"}
+            cls._sessions[session_name] = {
+                "session": new_session,
+                "active_session": False,
+            }
+
+            return {"name": session_name, "message": "New session created"}
         except ClientError as e:
-            return {"name" : session_name, "message" : "Failed to create session", "error" : str(e)}
+            return {
+                "name": session_name,
+                "message": "Failed to create session",
+                "error": str(e),
+            }
 
     @classmethod
     def list_sessions(cls) -> List[Dict[str, str]]:
         """
         List all established sessions.
-        
+
         :return: List of all AWS sessions available currently
         """
         if not cls._sessions:
@@ -41,42 +52,42 @@ class SessionManager:
                 session = session_details.get("session")
                 sessions_list.append(
                     {
-                        "session_name" : name,
-                        "region" : session.region_name,
-                        "profile" : session.profile_name
+                        "session_name": name,
+                        "region": session.region_name,
+                        "profile": session.profile_name,
                     }
                 )
             return sessions_list
 
-    @classmethod            
+    @classmethod
     def get_session(cls, session_name) -> Optional[boto3.Session]:
         """
         Retrieve a session by its name.
-        
+
         :param session_name: The name of the session to retrieve
         :return: The requested boto3.Session object, or None if not found
         """
         session_data = cls._sessions.get(session_name, None)
-        return session_data['session'] if session_data else None
-    
-    @classmethod            
+        return session_data["session"] if session_data else None
+
+    @classmethod
     def get_active_session(cls) -> Optional[boto3.Session]:
         """
         Retrieve active session.
-        
+
         :return: The active boto3.Session object, or None if not found
         """
         for session_name, session_data in cls._sessions.items():
-            if session_data['active_session'] == True:
+            if session_data["active_session"]:
                 return cls.get_session(session_name)
-        
+
         return None
-    
-    @classmethod            
-    def get_session_details_as_json(cls, session_name = None)-> Dict[str, str]:
+
+    @classmethod
+    def get_session_details_as_json(cls, session_name=None) -> Dict[str, str]:
         """
         Retrieve session details by its name in json format. If no session is specified, return info for active session.
-        
+
         :param session_name: The name of the session to retrieve
         :return: session details, or an empty dict if not found
         """
@@ -84,18 +95,18 @@ class SessionManager:
             session = cls.get_session(session_name)
         else:
             session = cls.get_active_session()
-        
+
         if session:
             return {
                 "access_key": session.get_credentials().access_key,
                 "secret_key": session.get_credentials().secret_key,
                 "token": session.get_credentials().token,
-                "available_profiles": session.available_profiles
+                "available_profiles": session.available_profiles,
             }
-        
+
         # Return {} if no session found
         return {}
-    
+
     @classmethod
     def set_active_session(cls, session_name) -> None:
         """
@@ -106,13 +117,12 @@ class SessionManager:
         """
         if session_name not in cls._sessions:
             raise ValueError("Session not found")
-        
+
         # Set selected session as default session
         boto3.DEFAULT_SESSION = cls._sessions[session_name]["session"]
         # Update the _sessions object with latest defautl session
-        cls._sessions[session_name]['active_session']= True
-        
-        
+        cls._sessions[session_name]["active_session"] = True
+
     @classmethod
     def remove_session(cls, session_name) -> None:
         """
@@ -123,9 +133,9 @@ class SessionManager:
         """
         if session_name not in cls._sessions:
             raise ValueError("Session not found")
-        
+
         del cls._sessions[session_name]
-        
+
     def get_user_details(cls) -> Optional[Dict[str, str]]:
         """
         Retrieves user detail from active session
@@ -135,13 +145,13 @@ class SessionManager:
         active_session = cls.get_active_session()
 
         if active_session:
-            sts = active_session.client('sts')
+            sts = active_session.client("sts")
             caller_info = sts.get_caller_identity()
 
             caller_info_output = {
-                'user_id' : caller_info.get('UserId', 'N/A'),
-                'account' : caller_info.get('Account', 'N/A'),
-                'user_arn' : caller_info.get('Arn', 'N/A')
+                "user_id": caller_info.get("UserId", "N/A"),
+                "account": caller_info.get("Account", "N/A"),
+                "user_arn": caller_info.get("Arn", "N/A"),
             }
             return caller_info_output
         else:

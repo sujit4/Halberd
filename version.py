@@ -1,6 +1,6 @@
 """Halberd version and metadata information"""
 
-# Version number format is: MAJOR.MINOR.PATCH 
+# Version number format is: MAJOR.MINOR.PATCH
 __version__ = "3.0.0"
 
 # Additional metadata

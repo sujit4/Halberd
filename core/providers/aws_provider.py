@@ -3,9 +3,10 @@ AWS credential provider implementation.
 """
 
 from typing import List, Optional
-from .base_provider import BaseCredentialProvider
-from ..credential_types import CredentialData
+
 from ..aws.aws_session_manager import SessionManager as AWSSessionManager
+from ..credential_types import CredentialData
+from .base_provider import BaseCredentialProvider
 
 
 class AWSCredentialProvider(BaseCredentialProvider):
@@ -22,7 +23,9 @@ class AWSCredentialProvider(BaseCredentialProvider):
             credentials = []
 
             for session in sessions:
-                credential_data, is_expired, is_active = self.classify_credential(session)
+                credential_data, is_expired, is_active = self.classify_credential(
+                    session
+                )
                 if credential_data:
                     credentials.append(credential_data)
 
@@ -39,27 +42,32 @@ class AWSCredentialProvider(BaseCredentialProvider):
             if active_session:
                 try:
                     active_details = AWSSessionManager.get_session_details_as_json()
-                    session_details = AWSSessionManager.get_session_details_as_json(credential_data['session_name'])
-                    is_active = (active_details.get('access_key') == session_details.get('access_key'))
+                    session_details = AWSSessionManager.get_session_details_as_json(
+                        credential_data["session_name"]
+                    )
+                    is_active = active_details.get("access_key") == session_details.get(
+                        "access_key"
+                    )
                 except Exception:
                     is_active = False
 
             cred_data = CredentialData(
-                id=credential_data['session_name'],
-                name=credential_data['session_name'],
+                id=credential_data["session_name"],
+                name=credential_data["session_name"],
                 detail=f"Region: {credential_data.get('region', 'N/A')}",
                 is_active=is_active,
                 is_expired=False,
                 provider=self.provider_name,
-                raw_data=credential_data
+                raw_data=credential_data,
             )
 
             return cred_data, False, is_active
         except Exception:
             return None, None, None
 
-
-    def delete_credential(self, credential_id: str, credential_data: Optional[CredentialData] = None) -> str:
+    def delete_credential(
+        self, credential_id: str, credential_data: Optional[CredentialData] = None
+    ) -> str:
         """Delete an AWS credential."""
         try:
             AWSSessionManager.remove_session(credential_id)
@@ -73,6 +81,8 @@ class AWSCredentialProvider(BaseCredentialProvider):
         """Set an AWS credential as active."""
         try:
             AWSSessionManager.set_active_session(credential_data.id)
-            return f"AWS credential '{credential_data.name}' set as active successfully!"
+            return (
+                f"AWS credential '{credential_data.name}' set as active successfully!"
+            )
         except Exception as e:
             return f"Failed to set active AWS credential: {str(e)}"

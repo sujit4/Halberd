@@ -2,13 +2,14 @@
 Data structures and types for credential management across all cloud providers.
 """
 
-from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class CredentialStatus(Enum):
     """Enumeration of credential statuses."""
+
     ACTIVE = "active"
     EXPIRED = "expired"
     INACTIVE = "inactive"
@@ -17,6 +18,7 @@ class CredentialStatus(Enum):
 @dataclass
 class CredentialData:
     """Standardized credential data structure."""
+
     id: str
     name: str
     detail: str
@@ -29,6 +31,7 @@ class CredentialData:
 @dataclass
 class ProviderConfig:
     """Configuration for a credential provider."""
+
     icon: str
     color: str
     display_name: str
@@ -36,31 +39,17 @@ class ProviderConfig:
 
 # Provider configurations
 PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
-    'entra': ProviderConfig(
-        icon='mdi:microsoft',
-        color='#0078d4',
-        display_name='Entra ID'
+    "entra": ProviderConfig(
+        icon="mdi:microsoft", color="#0078d4", display_name="Entra ID"
     ),
-    'aws': ProviderConfig(
-        icon='mdi:aws',
-        color='#ff9900',
-        display_name='AWS'
+    "aws": ProviderConfig(icon="mdi:aws", color="#ff9900", display_name="AWS"),
+    "azure": ProviderConfig(
+        icon="mdi:microsoft-azure", color="#0078d4", display_name="Azure"
     ),
-    'azure': ProviderConfig(
-        icon='mdi:microsoft-azure',
-        color='#0078d4',
-        display_name='Azure'
+    "gcp": ProviderConfig(icon="mdi:google-cloud", color="#4285f4", display_name="GCP"),
+    "m365": ProviderConfig(
+        icon="mdi:microsoft-office", color="#0078d4", display_name="Microsoft 365"
     ),
-    'gcp': ProviderConfig(
-        icon='mdi:google-cloud',
-        color='#4285f4',
-        display_name='GCP'
-    ),
-    'm365': ProviderConfig(
-        icon='mdi:microsoft-office',
-        color='#0078d4',
-        display_name='Microsoft 365'
-    )
 }
 
 

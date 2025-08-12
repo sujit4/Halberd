@@ -1,13 +1,18 @@
-import requests
 import json
 import re
 import time
-from typing import Optional, Dict, Any, Union, List
-from .entra_token_manager import EntraTokenManager
+from typing import Any, Dict, List, Optional, Union
+
+import requests
+
 from core.logging.logger import graph_logger
+
+from .entra_token_manager import EntraTokenManager
+
 
 class RateLimiter:
     """Handles rate limiting for Graph API requests"""
+
     def __init__(self, requests_per_second: int = 20):
         self.requests_per_second = requests_per_second
         self.last_request_time = 0.0
@@ -17,7 +22,7 @@ class RateLimiter:
     def wait_if_needed(self, response: Optional[requests.Response] = None) -> None:
         """
         Implements rate limiting based on time between requests and response headers.
-        
+
         Args:
             response: Optional response object to check for throttling headers
         """
@@ -25,8 +30,8 @@ class RateLimiter:
 
         # Check for throttling headers if response is provided
         if response is not None:
-            remaining = response.headers.get('X-RateLimit-Remaining')
-            retry_after = response.headers.get('Retry-After')
+            remaining = response.headers.get("X-RateLimit-Remaining")
+            retry_after = response.headers.get("Retry-After")
 
             if remaining is not None:
                 self._remaining_requests = int(remaining)
@@ -52,9 +57,10 @@ class RateLimiter:
 
         self.last_request_time = time.time()
 
+
 class GraphRequest:
     """Handles Microsoft Graph API requests with rate limiting and error handling"""
-    
+
     def __init__(self, requests_per_second: int = 20):
         self.manager = EntraTokenManager()
         self.rate_limiter = RateLimiter(requests_per_second)
@@ -74,49 +80,56 @@ class GraphRequest:
     def _make_request(self, method: str, url: str, **kwargs) -> requests.Response:
         """
         Makes an HTTP request with rate limiting and error handling.
-        
+
         Args:
             method: HTTP method to use
             url: URL to make request to
             **kwargs: Additional arguments to pass to requests
-            
+
         Returns:
             Response from the request
-            
+
         Raises:
             requests.exceptions.RequestException: If the request fails
         """
         self.rate_limiter.wait_if_needed()
-        
+
         try:
             response = self._session.request(method, url, **kwargs)
             self.rate_limiter.wait_if_needed(response)
             if response.status_code == 429:  # Too Many Requests
-                retry_after = int(response.headers.get('Retry-After', 30))
-                graph_logger.warning(f"Rate limit exceeded. Retrying after {retry_after} seconds")
+                retry_after = int(response.headers.get("Retry-After", 30))
+                graph_logger.warning(
+                    f"Rate limit exceeded. Retrying after {retry_after} seconds"
+                )
                 time.sleep(retry_after)
                 return self._make_request(method, url, **kwargs)
-                
+
             response.raise_for_status()
             return response
-            
+
         except requests.exceptions.RequestException as e:
             graph_logger.error(f"Request failed: {str(e)}")
             return response
 
-    def get(self, url: str, params: Optional[Dict] = None, 
-            pagination: bool = True, access_token: Optional[str] = None, 
-            stream: Optional[bool] = None) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
+    def get(
+        self,
+        url: str,
+        params: Optional[Dict] = None,
+        pagination: bool = True,
+        access_token: Optional[str] = None,
+        stream: Optional[bool] = None,
+    ) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
         """
         Make GET request to Graph API with pagination support.
-        
+
         Args:
             url: Graph API endpoint URL
             params: Optional query parameters
             pagination: Whether to handle pagination
             access_token: Optional access token to use
             stream: Whether to stream the response
-            
+
         Returns:
             List of results if paginated, otherwise single result
         """
@@ -125,30 +138,33 @@ class GraphRequest:
 
         while url:
             try:
-                response = self._make_request('GET', url, headers=headers, 
-                                           params=params, stream=stream)
+                response = self._make_request(
+                    "GET", url, headers=headers, params=params, stream=stream
+                )
                 result = response.json()
-                
-                if 'value' in result:
-                    graph_results.extend(result['value'])
+
+                if "value" in result:
+                    graph_results.extend(result["value"])
                 else:
                     return result
 
-                url = result.get('@odata.nextLink') if pagination else None
-                
+                url = result.get("@odata.nextLink") if pagination else None
+
             except Exception as e:
                 graph_logger.error(f"GET request failed: {str(e)}")
                 return e
 
         return graph_results
 
-    def post(self, url: str, data: Dict[str, Any], 
-             access_token: Optional[str] = None) -> requests.Response:
+    def post(
+        self, url: str, data: Dict[str, Any], access_token: Optional[str] = None
+    ) -> requests.Response:
         """Make POST request to Graph API"""
         headers = self._create_headers(access_token)
         try:
-            return self._make_request('POST', url, headers=headers, 
-                                    data=json.dumps(data))
+            return self._make_request(
+                "POST", url, headers=headers, data=json.dumps(data)
+            )
         except Exception as e:
             graph_logger.error(f"POST request failed: {str(e)}")
             return e
@@ -157,29 +173,33 @@ class GraphRequest:
         """Make DELETE request to Graph API"""
         headers = self._create_headers(access_token)
         try:
-            return self._make_request('DELETE', url, headers=headers)
+            return self._make_request("DELETE", url, headers=headers)
         except Exception as e:
             graph_logger.error(f"DELETE request failed: {str(e)}")
             return e
 
-    def patch(self, url: str, data: Dict[str, Any], 
-              access_token: Optional[str] = None) -> requests.Response:
+    def patch(
+        self, url: str, data: Dict[str, Any], access_token: Optional[str] = None
+    ) -> requests.Response:
         """Make PATCH request to Graph API"""
         headers = self._create_headers(access_token)
         try:
-            return self._make_request('PATCH', url, headers=headers, 
-                                    data=json.dumps(data))
+            return self._make_request(
+                "PATCH", url, headers=headers, data=json.dumps(data)
+            )
         except Exception as e:
             graph_logger.error(f"PATCH request failed: {str(e)}")
             return e
 
-    def put(self, url: str, data: Dict[str, Any], 
-            access_token: Optional[str] = None) -> Dict[str, Any]:
+    def put(
+        self, url: str, data: Dict[str, Any], access_token: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Make PUT request to Graph API"""
         headers = self._create_headers(access_token)
         try:
-            response = self._make_request('PUT', url, headers=headers, 
-                                        data=json.dumps(data))
+            response = self._make_request(
+                "PUT", url, headers=headers, data=json.dumps(data)
+            )
             return response.json()
         except Exception as e:
             graph_logger.error(f"PUT request failed: {str(e)}")
@@ -189,12 +209,14 @@ class GraphRequest:
     def check_guid(inp_string: str) -> bool:
         """
         Check if a string is a valid GUID.
-        
+
         Args:
             inp_string: String to check
-            
+
         Returns:
             True if string is a valid GUID, False otherwise
         """
-        guid_regex = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
+        guid_regex = re.compile(
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I
+        )
         return bool(guid_regex.match(inp_string))

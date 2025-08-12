@@ -2,6 +2,7 @@ import json
 from collections import Counter, defaultdict
 from datetime import datetime
 
+
 def parse_log_entry(line):
     """Function to parse a line of log"""
     try:
@@ -10,10 +11,12 @@ def parse_log_entry(line):
     except:
         return None
 
+
 def read_log_file(file_path):
     """Function to open and read contents of the app log file"""
-    with open(file_path, 'r') as file:
+    with open(file_path, "r") as file:
         return file.readlines()
+
 
 def analyze_log(log_lines):
     """Function to analyze app logs to generate metrics"""
@@ -21,69 +24,84 @@ def analyze_log(log_lines):
     for line in log_lines:
         entry = parse_log_entry(line)
         if entry:
-            event_id = entry['event_id']
+            event_id = entry["event_id"]
             executions[event_id].update(entry)
 
-    completed_executions = [ex for ex in executions.values() if 'result' in ex]
+    completed_executions = [ex for ex in executions.values() if "result" in ex]
 
     total_techniques = len(completed_executions)
-    successful_techniques = sum(1 for ex in completed_executions if ex['result'] == 'success')
-    failed_techniques = sum(1 for ex in completed_executions if ex['result'] == 'failed')
+    successful_techniques = sum(
+        1 for ex in completed_executions if ex["result"] == "success"
+    )
+    failed_techniques = sum(
+        1 for ex in completed_executions if ex["result"] == "failed"
+    )
 
-    technique_counts = Counter(ex['technique'] for ex in completed_executions)
-    tactic_counts = Counter(ex['tactic'] for ex in completed_executions)
-    source_counts = Counter(ex['source'] for ex in completed_executions)
+    technique_counts = Counter(ex["technique"] for ex in completed_executions)
+    tactic_counts = Counter(ex["tactic"] for ex in completed_executions)
+    source_counts = Counter(ex["source"] for ex in completed_executions)
 
-    start_time = min(datetime.fromisoformat(ex['timestamp']) for ex in executions.values())
-    end_time = max(datetime.fromisoformat(ex['timestamp']) for ex in executions.values())
+    start_time = min(
+        datetime.fromisoformat(ex["timestamp"]) for ex in executions.values()
+    )
+    end_time = max(
+        datetime.fromisoformat(ex["timestamp"]) for ex in executions.values()
+    )
     duration = end_time - start_time
 
     # Per-source analysis
-    per_source_analysis = defaultdict(lambda: {
-        'total': 0,
-        'successful': 0,
-        'failed': 0,
-        'techniques': defaultdict(list),
-        'tactics': Counter(),
-        'success_rate': 0,
-        'unique_techniques': 0,
-    })
+    per_source_analysis = defaultdict(
+        lambda: {
+            "total": 0,
+            "successful": 0,
+            "failed": 0,
+            "techniques": defaultdict(list),
+            "tactics": Counter(),
+            "success_rate": 0,
+            "unique_techniques": 0,
+        }
+    )
 
     for ex in completed_executions:
-        source = ex['source']
-        per_source_analysis[source]['total'] += 1
-        per_source_analysis[source]['techniques'][ex['technique']].append({
-            'execution_time': ex['timestamp'],
-            'result': ex['result'],
-            'target': ex.get('target', 'N/A')
-        })
-        per_source_analysis[source]['tactics'][ex['tactic']] += 1
-        
-        if ex['result'] == 'success':
-            per_source_analysis[source]['successful'] += 1
+        source = ex["source"]
+        per_source_analysis[source]["total"] += 1
+        per_source_analysis[source]["techniques"][ex["technique"]].append(
+            {
+                "execution_time": ex["timestamp"],
+                "result": ex["result"],
+                "target": ex.get("target", "N/A"),
+            }
+        )
+        per_source_analysis[source]["tactics"][ex["tactic"]] += 1
+
+        if ex["result"] == "success":
+            per_source_analysis[source]["successful"] += 1
         else:
-            per_source_analysis[source]['failed'] += 1
+            per_source_analysis[source]["failed"] += 1
 
     for source, data in per_source_analysis.items():
-        data['success_rate'] = (data['successful'] / data['total']) * 100 if data['total'] > 0 else 0
-        data['unique_techniques'] = len(data['techniques'])
+        data["success_rate"] = (
+            (data["successful"] / data["total"]) * 100 if data["total"] > 0 else 0
+        )
+        data["unique_techniques"] = len(data["techniques"])
 
     return {
-        'total_techniques': total_techniques,
-        'successful_techniques': successful_techniques,
-        'failed_techniques': failed_techniques,
-        'technique_counts': technique_counts,
-        'tactic_counts': tactic_counts,
-        'source_counts': source_counts,
-        'start_time': start_time,
-        'end_time': end_time,
-        'duration': duration,
-        'per_source_analysis': per_source_analysis
+        "total_techniques": total_techniques,
+        "successful_techniques": successful_techniques,
+        "failed_techniques": failed_techniques,
+        "technique_counts": technique_counts,
+        "tactic_counts": tactic_counts,
+        "source_counts": source_counts,
+        "start_time": start_time,
+        "end_time": end_time,
+        "duration": duration,
+        "per_source_analysis": per_source_analysis,
     }
+
 
 def generate_html_report(analysis):
     """Function to generate a HTML report from log analysis"""
-    html_template = '''
+    html_template = """
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -151,7 +169,7 @@ def generate_html_report(analysis):
     </head>
     <body>
         <h1>Halberd Security Testing Summary Report</h1>
-        
+
         <div class="section">
             <h2>1. Overview</h2>
             <p>Testing Period: {start_time} to {end_time}</p>
@@ -253,73 +271,92 @@ def generate_html_report(analysis):
         </script>
     </body>
     </html>
-    '''
+    """
 
     # Analyze tatics
-    tactic_analysis = "\n".join(f"<li>{tactic}: {count} attempts</li>" for tactic, count in analysis['tactic_counts'].most_common())
+    tactic_analysis = "\n".join(
+        f"<li>{tactic}: {count} attempts</li>"
+        for tactic, count in analysis["tactic_counts"].most_common()
+    )
     # Analyze techniques
-    technique_analysis = "\n".join(f"<li>{technique}: {count} executions</li>" for technique, count in analysis['technique_counts'].most_common())
+    technique_analysis = "\n".join(
+        f"<li>{technique}: {count} executions</li>"
+        for technique, count in analysis["technique_counts"].most_common()
+    )
 
     # Analyze metrics per source / identity used for testing
     per_source_analysis = ""
-    for source, data in analysis['per_source_analysis'].items():
-        per_source_analysis += f'''
+    for source, data in analysis["per_source_analysis"].items():
+        per_source_analysis += f"""
         <div class="source-section">
             <h3>Source: {source}</h3>
             <h4>Key Metrics:</h4>
             <ul>
-                <li>Total techniques executed: {data['total']}</li>
-                <li>Successful techniques: {data['successful']}</li>
-                <li>Failed techniques: {data['failed']}</li>
-                <li>Success rate: {data['success_rate']:.2f}%</li>
-                <li>Unique techniques attempted: {data['unique_techniques']}</li>
+                <li>Total techniques executed: {data["total"]}</li>
+                <li>Successful techniques: {data["successful"]}</li>
+                <li>Failed techniques: {data["failed"]}</li>
+                <li>Success rate: {data["success_rate"]:.2f}%</li>
+                <li>Unique techniques attempted: {data["unique_techniques"]}</li>
             </ul>
             <h4>Techniques Used by Source:</h4>
-        '''
-        for technique, executions in data['techniques'].items():
-            per_source_analysis += f'''
+        """
+        for technique, executions in data["techniques"].items():
+            per_source_analysis += f"""
             <div class="technique">
                 <h5>{technique}: {len(executions)} executions</h5>
-            '''
+            """
             for execution in executions:
-                result_class = 'success' if execution['result'] == 'success' else 'failure'
+                result_class = (
+                    "success" if execution["result"] == "success" else "failure"
+                )
                 per_source_analysis += f'''
                 <div class="execution">
-                    <p>Execution time: {execution['execution_time']}</p>
-                    <p class="{result_class}">Execution result: {execution['result']}</p>
-                    <p>Target: {execution['target']}</p>
+                    <p>Execution time: {execution["execution_time"]}</p>
+                    <p class="{result_class}">Execution result: {execution["result"]}</p>
+                    <p>Target: {execution["target"]}</p>
                 </div>
                 '''
             per_source_analysis += "</div>"
-        
-        per_source_analysis += '''
+
+        per_source_analysis += """
             <h4>Tactics Focus:</h4>
             <ul>
-        '''
-        per_source_analysis += "\n".join(f"<li>{tactic}: {count} attempts</li>" for tactic, count in data['tactics'].most_common())
-        per_source_analysis += '''
+        """
+        per_source_analysis += "\n".join(
+            f"<li>{tactic}: {count} attempts</li>"
+            for tactic, count in data["tactics"].most_common()
+        )
+        per_source_analysis += """
             </ul>
         </div>
-        '''
+        """
 
-    tactic_labels = json.dumps([tactic for tactic, _ in analysis['tactic_counts'].most_common()])
-    tactic_data = json.dumps([count for _, count in analysis['tactic_counts'].most_common()])
+    tactic_labels = json.dumps(
+        [tactic for tactic, _ in analysis["tactic_counts"].most_common()]
+    )
+    tactic_data = json.dumps(
+        [count for _, count in analysis["tactic_counts"].most_common()]
+    )
 
     try:
         html_content = html_template.format(
-            start_time=analysis['start_time'].strftime('%Y-%m-%d %H:%M'),
-            end_time=analysis['end_time'].strftime('%Y-%m-%d %H:%M'),
-            duration=analysis['duration'],
-            total_techniques=analysis['total_techniques'],
-            successful_techniques=analysis['successful_techniques'],
-            failed_techniques=analysis['failed_techniques'],
-            success_rate=(analysis['successful_techniques'] / analysis['total_techniques']) * 100,
-            failure_rate=(analysis['failed_techniques'] / analysis['total_techniques']) * 100,
+            start_time=analysis["start_time"].strftime("%Y-%m-%d %H:%M"),
+            end_time=analysis["end_time"].strftime("%Y-%m-%d %H:%M"),
+            duration=analysis["duration"],
+            total_techniques=analysis["total_techniques"],
+            successful_techniques=analysis["successful_techniques"],
+            failed_techniques=analysis["failed_techniques"],
+            success_rate=(
+                analysis["successful_techniques"] / analysis["total_techniques"]
+            )
+            * 100,
+            failure_rate=(analysis["failed_techniques"] / analysis["total_techniques"])
+            * 100,
             tactic_analysis=tactic_analysis,
             technique_analysis=technique_analysis,
             per_source_analysis=per_source_analysis,
             tactic_labels=tactic_labels,
-            tactic_data=tactic_data
+            tactic_data=tactic_data,
         )
     except Exception as e:
         print(f"Error in generating HTML content: {str(e)}")
