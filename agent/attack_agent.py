@@ -865,11 +865,12 @@ class AttackAgent:
                     first_item = content[0]
                     if isinstance(first_item, dict) and first_item.get("type") == "tool_result":
                         # Convert tool results to ToolMessages
-                        for tool_result in content:
+                        for i, tool_result in enumerate(content):
+                            tool_call_id = tool_result.get("tool_use_id", "") or f"fallback_id_{i}_{int(time.time() * 1000)}"
                             langchain_messages.append(
                                 ToolMessage(
                                     content=str(tool_result.get("content", "")),
-                                    tool_call_id=tool_result.get("tool_use_id", "")
+                                    tool_call_id=tool_call_id
                                 )
                             )
                     else:
@@ -907,10 +908,11 @@ class AttackAgent:
                                 else:
                                     text_content += str(text_value) if text_value else ""
                             elif block.get("type") == "tool_use":
+                                tool_id = block.get("id", "") or f"stored_tool_{len(tool_calls)}_{int(time.time() * 1000)}"
                                 tool_calls.append({
                                     "name": block.get("name", ""),
                                     "args": block.get("input", {}),
-                                    "id": block.get("id", "")
+                                    "id": tool_id
                                 })
                         elif isinstance(block, str):
                             text_content += block
@@ -1166,6 +1168,26 @@ class AttackAgent:
                 tool_calls = current_message.tool_calls
                 logger.info(f"Processing {len(tool_calls)} tool call(s): {[tc.get('name', '') if isinstance(tc, dict) else getattr(tc, 'name', '') for tc in tool_calls]}")
 
+                # Pre-compute tool call data with consistent IDs
+                # This ensures the same IDs are used in both serialization and execution
+                processed_tool_calls = []
+                for i, tc in enumerate(tool_calls):
+                    if isinstance(tc, dict):
+                        tool_id = tc.get("id", "") or f"tool_call_{i}_{int(time.time() * 1000)}"
+                        tool_name = tc.get("name", "")
+                        tool_args = tc.get("args", {})
+                    else:
+                        # Handle as object with attributes
+                        tool_id = getattr(tc, 'id', "") or f"tool_call_{i}_{int(time.time() * 1000)}"
+                        tool_name = getattr(tc, 'name', "")
+                        tool_args = getattr(tc, 'args', {})
+
+                    processed_tool_calls.append({
+                        "id": tool_id,
+                        "name": tool_name,
+                        "args": tool_args
+                    })
+
                 # Convert LangChain message to serializable format before adding to history
                 serializable_content = []
 
@@ -1181,23 +1203,13 @@ class AttackAgent:
                     else:
                         serializable_content.append({"type": "text", "text": str(content)})
 
-                # Add tool calls - handle both dict and object formats
-                for i, tc in enumerate(tool_calls):
-                    if isinstance(tc, dict):
-                        tool_id = tc.get("id", "") or f"tool_call_{i}_{int(time.time() * 1000)}"
-                        tool_name = tc.get("name", "")
-                        tool_args = tc.get("args", {})
-                    else:
-                        # Handle as object with attributes
-                        tool_id = getattr(tc, 'id', "") or f"tool_call_{i}_{int(time.time() * 1000)}"
-                        tool_name = getattr(tc, 'name', "")
-                        tool_args = getattr(tc, 'args', {})
-
+                # Add tool calls using pre-computed data
+                for ptc in processed_tool_calls:
                     serializable_content.append({
                         "type": "tool_use",
-                        "id": tool_id,
-                        "name": tool_name,
-                        "input": tool_args
+                        "id": ptc["id"],
+                        "name": ptc["name"],
+                        "input": ptc["args"]
                     })
 
                 # Add the serialized message to the conversation history
@@ -1205,17 +1217,12 @@ class AttackAgent:
                     {"role": "assistant", "content": serializable_content}
                 )
 
-                # Process each tool call
+                # Process each tool call using pre-computed data
                 tool_results = []
-                for i, tc in enumerate(tool_calls):
-                    if isinstance(tc, dict):
-                        func_name = tc.get("name", "")
-                        func_params = tc.get("args", {})
-                        tool_use_id = tc.get("id", "") or f"tool_call_{i}_{int(time.time() * 1000)}"
-                    else:
-                        func_name = getattr(tc, 'name', "")
-                        func_params = getattr(tc, 'args', {})
-                        tool_use_id = getattr(tc, 'id', "") or f"tool_call_{i}_{int(time.time() * 1000)}"
+                for ptc in processed_tool_calls:
+                    func_name = ptc["name"]
+                    func_params = ptc["args"]
+                    tool_use_id = ptc["id"]
 
                     # Execute tool and get result
                     result = self.handle_tool_use(func_name, func_params)
@@ -1442,24 +1449,47 @@ class AttackAgent:
         """
         Count tokens in the API response content.
 
+        Works with LangChain AIMessage format.
+
         Args:
-            response: API response object
+            response: LangChain AIMessage or similar response object
 
         Returns:
             Token count for the response
         """
         try:
-            # Extract all text content from response
+            # Handle LangChain AIMessage format
             content_parts = []
-            for content_block in response.content:
-                if content_block.type == "text":
-                    content_parts.append(content_block.text)
-                elif content_block.type == "tool_use":
-                    # Include tool use information in token count
-                    content_parts.append(json.dumps({
-                        "name": content_block.name,
-                        "input": content_block.input
-                    }))
+
+            # Get content - can be string or list
+            content = getattr(response, 'content', None)
+            if content:
+                if isinstance(content, str):
+                    content_parts.append(content)
+                elif isinstance(content, list):
+                    for item in content:
+                        if isinstance(item, str):
+                            content_parts.append(item)
+                        elif isinstance(item, dict):
+                            if item.get("type") == "text":
+                                content_parts.append(item.get("text", ""))
+                            else:
+                                content_parts.append(json.dumps(item))
+
+            # Include tool calls if present
+            tool_calls = getattr(response, 'tool_calls', None)
+            if tool_calls:
+                for tc in tool_calls:
+                    if isinstance(tc, dict):
+                        content_parts.append(json.dumps({
+                            "name": tc.get("name", ""),
+                            "args": tc.get("args", {})
+                        }))
+                    else:
+                        content_parts.append(json.dumps({
+                            "name": getattr(tc, 'name', ""),
+                            "args": getattr(tc, 'args', {})
+                        }))
 
             # Combine all content and count tokens
             combined_content = "\n".join(content_parts)
@@ -1467,14 +1497,8 @@ class AttackAgent:
 
         except Exception as e:
             logger.warning(f"Error counting response tokens, using fallback: {e}")
-            # Fallback estimation
-            total_chars = 0
-            for content_block in response.content:
-                if content_block.type == "text":
-                    total_chars += len(content_block.text)
-                elif content_block.type == "tool_use":
-                    total_chars += len(json.dumps(content_block.input))
-            return total_chars // 4
+            # Fallback estimation based on string representation
+            return len(str(response)) // 4
 
     def get_conversation_stats(self) -> Dict[str, Any]:
         """
