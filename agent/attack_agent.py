@@ -1164,7 +1164,7 @@ class AttackAgent:
             # LangChain uses tool_calls attribute on AIMessage
             while hasattr(current_message, 'tool_calls') and current_message.tool_calls:
                 tool_calls = current_message.tool_calls
-                logger.info(f"Processing {len(tool_calls)} tool call(s): {[tc['name'] for tc in tool_calls]}")
+                logger.info(f"Processing {len(tool_calls)} tool call(s): {[tc.get('name', '') if isinstance(tc, dict) else getattr(tc, 'name', '') for tc in tool_calls]}")
 
                 # Convert LangChain message to serializable format before adding to history
                 serializable_content = []
@@ -1181,13 +1181,23 @@ class AttackAgent:
                     else:
                         serializable_content.append({"type": "text", "text": str(content)})
 
-                # Add tool calls
-                for tc in tool_calls:
+                # Add tool calls - handle both dict and object formats
+                for i, tc in enumerate(tool_calls):
+                    if isinstance(tc, dict):
+                        tool_id = tc.get("id", "") or f"tool_call_{i}_{int(time.time() * 1000)}"
+                        tool_name = tc.get("name", "")
+                        tool_args = tc.get("args", {})
+                    else:
+                        # Handle as object with attributes
+                        tool_id = getattr(tc, 'id', "") or f"tool_call_{i}_{int(time.time() * 1000)}"
+                        tool_name = getattr(tc, 'name', "")
+                        tool_args = getattr(tc, 'args', {})
+
                     serializable_content.append({
                         "type": "tool_use",
-                        "id": tc.get("id", ""),
-                        "name": tc.get("name", ""),
-                        "input": tc.get("args", {})
+                        "id": tool_id,
+                        "name": tool_name,
+                        "input": tool_args
                     })
 
                 # Add the serialized message to the conversation history
@@ -1197,10 +1207,15 @@ class AttackAgent:
 
                 # Process each tool call
                 tool_results = []
-                for tc in tool_calls:
-                    func_name = tc.get("name", "")
-                    func_params = tc.get("args", {})
-                    tool_use_id = tc.get("id", "")
+                for i, tc in enumerate(tool_calls):
+                    if isinstance(tc, dict):
+                        func_name = tc.get("name", "")
+                        func_params = tc.get("args", {})
+                        tool_use_id = tc.get("id", "") or f"tool_call_{i}_{int(time.time() * 1000)}"
+                    else:
+                        func_name = getattr(tc, 'name', "")
+                        func_params = getattr(tc, 'args', {})
+                        tool_use_id = getattr(tc, 'id', "") or f"tool_call_{i}_{int(time.time() * 1000)}"
 
                     # Execute tool and get result
                     result = self.handle_tool_use(func_name, func_params)
@@ -1289,12 +1304,21 @@ class AttackAgent:
                     serializable_content.append({"type": "text", "text": str(content)})
 
             if hasattr(current_message, 'tool_calls') and current_message.tool_calls:
-                for tc in current_message.tool_calls:
+                for i, tc in enumerate(current_message.tool_calls):
+                    if isinstance(tc, dict):
+                        tool_id = tc.get("id", "") or f"tool_call_{i}_{int(time.time() * 1000)}"
+                        tool_name = tc.get("name", "")
+                        tool_args = tc.get("args", {})
+                    else:
+                        tool_id = getattr(tc, 'id', "") or f"tool_call_{i}_{int(time.time() * 1000)}"
+                        tool_name = getattr(tc, 'name', "")
+                        tool_args = getattr(tc, 'args', {})
+
                     serializable_content.append({
                         "type": "tool_use",
-                        "id": tc.get("id", ""),
-                        "name": tc.get("name", ""),
-                        "input": tc.get("args", {})
+                        "id": tool_id,
+                        "name": tool_name,
+                        "input": tool_args
                     })
 
             # Add the final message to conversation history
