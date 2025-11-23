@@ -12,6 +12,7 @@ import time
 import random
 import re
 import logging
+import uuid
 from typing import Any, Dict, List, Optional, Union
 from enum import Enum
 
@@ -866,7 +867,7 @@ class AttackAgent:
                     if isinstance(first_item, dict) and first_item.get("type") == "tool_result":
                         # Convert tool results to ToolMessages
                         for i, tool_result in enumerate(content):
-                            tool_call_id = tool_result.get("tool_use_id", "") or f"fallback_id_{i}_{int(time.time() * 1000)}"
+                            tool_call_id = tool_result.get("tool_use_id", "") or f"toolu_{uuid.uuid4().hex[:24]}"
                             langchain_messages.append(
                                 ToolMessage(
                                     content=str(tool_result.get("content", "")),
@@ -908,7 +909,7 @@ class AttackAgent:
                                 else:
                                     text_content += str(text_value) if text_value else ""
                             elif block.get("type") == "tool_use":
-                                tool_id = block.get("id", "") or f"stored_tool_{len(tool_calls)}_{int(time.time() * 1000)}"
+                                tool_id = block.get("id", "") or f"toolu_{uuid.uuid4().hex[:24]}"
                                 tool_calls.append({
                                     "name": block.get("name", ""),
                                     "args": block.get("input", {}),
@@ -1173,12 +1174,12 @@ class AttackAgent:
                 processed_tool_calls = []
                 for i, tc in enumerate(tool_calls):
                     if isinstance(tc, dict):
-                        tool_id = tc.get("id", "") or f"tool_call_{i}_{int(time.time() * 1000)}"
+                        tool_id = tc.get("id", "") or f"toolu_{uuid.uuid4().hex[:24]}"
                         tool_name = tc.get("name", "")
                         tool_args = tc.get("args", {})
                     else:
                         # Handle as object with attributes
-                        tool_id = getattr(tc, 'id', "") or f"tool_call_{i}_{int(time.time() * 1000)}"
+                        tool_id = getattr(tc, 'id', "") or f"toolu_{uuid.uuid4().hex[:24]}"
                         tool_name = getattr(tc, 'name', "")
                         tool_args = getattr(tc, 'args', {})
 
@@ -1313,11 +1314,11 @@ class AttackAgent:
             if hasattr(current_message, 'tool_calls') and current_message.tool_calls:
                 for i, tc in enumerate(current_message.tool_calls):
                     if isinstance(tc, dict):
-                        tool_id = tc.get("id", "") or f"tool_call_{i}_{int(time.time() * 1000)}"
+                        tool_id = tc.get("id", "") or f"toolu_{uuid.uuid4().hex[:24]}"
                         tool_name = tc.get("name", "")
                         tool_args = tc.get("args", {})
                     else:
-                        tool_id = getattr(tc, 'id', "") or f"tool_call_{i}_{int(time.time() * 1000)}"
+                        tool_id = getattr(tc, 'id', "") or f"toolu_{uuid.uuid4().hex[:24]}"
                         tool_name = getattr(tc, 'name', "")
                         tool_args = getattr(tc, 'args', {})
 
