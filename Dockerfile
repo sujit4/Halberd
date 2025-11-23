@@ -38,7 +38,7 @@ RUN mkdir -p /etc/apt/keyrings \
     && curl -sLS https://packages.microsoft.com/keys/microsoft.asc \
     | gpg --dearmor | tee /etc/apt/keyrings/microsoft.gpg > /dev/null \
     && chmod go+r /etc/apt/keyrings/microsoft.gpg \
-    && AZ_DIST=$(lsb_release -cs) \
+    && AZ_DIST="bookworm" \
     && echo "Types: deb\nURIs: https://packages.microsoft.com/repos/azure-cli/\nSuites: ${AZ_DIST}\nComponents: main\nArchitectures: $(dpkg --print-architecture)\nSigned-by: /etc/apt/keyrings/microsoft.gpg" \
     | tee /etc/apt/sources.list.d/azure-cli.sources \
     && apt-get update \
