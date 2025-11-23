@@ -695,7 +695,7 @@ class AttackAgent:
         include_system: bool = True
     ) -> int:
         """
-        Count tokens for a complete message array using Anthropic's native counting.
+        Count tokens for a complete message array.
 
         Args:
             messages: List of message dictionaries
@@ -704,45 +704,9 @@ class AttackAgent:
         Returns:
             Token count for the messages
         """
-        if not self.is_anthropic_ready():
-            # Fallback estimation if client not ready
-            return self._estimate_tokens_fallback(messages, include_system)
-
-        try:
-            # Prepare messages for token counting
-            messages_for_counting = []
-
-            # Add conversation messages
-            for msg in messages:
-                if isinstance(msg, dict) and "role" in msg and "content" in msg:
-                    messages_for_counting.append(msg)
-                else:
-                    # Convert non-standard message format
-                    messages_for_counting.append({
-                        "role": "user",
-                        "content": json.dumps(msg) if not isinstance(msg, str) else str(msg)
-                    })
-
-            # Count tokens using Anthropic's native method
-            if include_system:
-                # Include system message in counting
-                count_result = self.anthropic.messages.count_tokens(
-                    model="claude-3-7-sonnet-20250219",
-                    messages=messages_for_counting,
-                    system=IDENTITY
-                )
-            else:
-                # Count only conversation messages
-                count_result = self.anthropic.messages.count_tokens(
-                    model="claude-3-7-sonnet-20250219",
-                    messages=messages_for_counting
-                )
-
-            return count_result.input_tokens
-
-        except Exception as e:
-            logger.warning(f"Token counting error, using fallback: {e}")
-            return self._estimate_tokens_fallback(messages, include_system)
+        # LangChain ChatAnthropic doesn't support native token counting
+        # Always use fallback estimation
+        return self._estimate_tokens_fallback(messages, include_system)
 
     def count_tokens_for_content(self, content: Union[str, Any]) -> int:
         """
@@ -754,28 +718,8 @@ class AttackAgent:
         Returns:
             Token count for the content
         """
-        if not self.is_anthropic_ready():
-            # Fallback estimation
-            return self._estimate_content_tokens(content)
-
-        try:
-            # Convert content to message format
-            if isinstance(content, str):
-                messages = [{"role": "user", "content": content}]
-            else:
-                messages = [{"role": "user", "content": str(content)}]
-
-            # Count tokens without system message (since this is just content)
-            count_result = self.anthropic.messages.count_tokens(
-                model="claude-3-7-sonnet-20250219",
-                messages=messages
-            )
-
-            return count_result.input_tokens
-
-        except Exception as e:
-            logger.warning(f"Content token counting error, using fallback: {e}")
-            return self._estimate_content_tokens(content)
+        # Use fallback estimation for LangChain
+        return self._estimate_content_tokens(content)
 
     def _estimate_content_tokens(self, content: Any) -> int:
         """
@@ -929,8 +873,21 @@ class AttackAgent:
                                 )
                             )
                     else:
-                        # Regular user message with complex content
-                        langchain_messages.append(HumanMessage(content=content))
+                        # Regular user message with complex content (multimodal)
+                        # Extract text from content blocks
+                        text_parts = []
+                        for item in content:
+                            if isinstance(item, dict):
+                                if item.get("type") == "text":
+                                    text_parts.append(item.get("text", ""))
+                                elif item.get("type") == "image":
+                                    text_parts.append("[Image attached]")
+                                elif item.get("type") == "document":
+                                    text_parts.append("[Document attached]")
+                            elif isinstance(item, str):
+                                text_parts.append(item)
+                        combined_text = "\n".join(text_parts) if text_parts else str(content)
+                        langchain_messages.append(HumanMessage(content=combined_text))
                 else:
                     langchain_messages.append(HumanMessage(content=str(content)))
 
