@@ -900,13 +900,20 @@ class AttackAgent:
                     for block in content:
                         if isinstance(block, dict):
                             if block.get("type") == "text":
-                                text_content += block.get("text", "")
+                                text_value = block.get("text", "")
+                                # Ensure text_value is a string
+                                if isinstance(text_value, list):
+                                    text_content += " ".join(str(t) for t in text_value)
+                                else:
+                                    text_content += str(text_value) if text_value else ""
                             elif block.get("type") == "tool_use":
                                 tool_calls.append({
                                     "name": block.get("name", ""),
                                     "args": block.get("input", {}),
                                     "id": block.get("id", "")
                                 })
+                        elif isinstance(block, str):
+                            text_content += block
 
                     if tool_calls:
                         ai_msg = AIMessage(
@@ -1164,7 +1171,15 @@ class AttackAgent:
 
                 # Add text content if present
                 if current_message.content:
-                    serializable_content.append({"type": "text", "text": current_message.content})
+                    content = current_message.content
+                    if isinstance(content, list):
+                        for item in content:
+                            if isinstance(item, str):
+                                serializable_content.append({"type": "text", "text": item})
+                            elif isinstance(item, dict):
+                                serializable_content.append(item)
+                    else:
+                        serializable_content.append({"type": "text", "text": str(content)})
 
                 # Add tool calls
                 for tc in tool_calls:
@@ -1242,12 +1257,36 @@ class AttackAgent:
                     return error_message
 
             # Extract response text from LangChain AIMessage
-            response_text = current_message.content if hasattr(current_message, 'content') else str(current_message)
+            if hasattr(current_message, 'content'):
+                content = current_message.content
+                # Handle case where content might be a list
+                if isinstance(content, list):
+                    # Extract text from list content
+                    text_parts = []
+                    for item in content:
+                        if isinstance(item, str):
+                            text_parts.append(item)
+                        elif isinstance(item, dict) and item.get("type") == "text":
+                            text_parts.append(item.get("text", ""))
+                    response_text = "\n".join(text_parts)
+                else:
+                    response_text = str(content) if content else ""
+            else:
+                response_text = str(current_message)
 
             # Convert final message to serializable format
             serializable_content = []
-            if current_message.content:
-                serializable_content.append({"type": "text", "text": current_message.content})
+            if hasattr(current_message, 'content') and current_message.content:
+                content = current_message.content
+                # Ensure we store string content
+                if isinstance(content, list):
+                    for item in content:
+                        if isinstance(item, str):
+                            serializable_content.append({"type": "text", "text": item})
+                        elif isinstance(item, dict):
+                            serializable_content.append(item)
+                else:
+                    serializable_content.append({"type": "text", "text": str(content)})
 
             if hasattr(current_message, 'tool_calls') and current_message.tool_calls:
                 for tc in current_message.tool_calls:
