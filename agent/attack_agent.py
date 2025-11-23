@@ -1,4 +1,9 @@
-from anthropic import Anthropic
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
+from langchain_core.tools import tool, StructuredTool
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables import RunnableConfig
+from pydantic import BaseModel, Field
 from .tools import *
 from dotenv import load_dotenv
 from core.logging.logger import app_logger, StructuredAppLog
@@ -150,10 +155,162 @@ End response
 </technique-response-format>
 """
 
+# Pydantic models for tool inputs
+class ExecuteTechniqueInput(BaseModel):
+    t_id: str = Field(description="The ID of the Halberd technique to be executed")
+    technique_input: dict = Field(default={}, description="A dictionary of the technique's input fields and values")
+
+class TechniqueIdInput(BaseModel):
+    t_id: str = Field(description="The ID of the Halberd technique")
+
+class ListTechniquesInput(BaseModel):
+    attack_surface: Optional[str] = Field(default=None, description="Attack surface name to filter (azure, entra_id, aws, m365, gcp)")
+    tactic: Optional[str] = Field(default=None, description="MITRE tactic to filter techniques")
+    technique_id: Optional[str] = Field(default=None, description="Technique ID to fetch a specific technique")
+
+class ListTacticsInput(BaseModel):
+    attack_surface: Optional[str] = Field(default=None, description="Attack surface name to filter tactics")
+
+class TokenInput(BaseModel):
+    token: str = Field(description="The access token string")
+
+class SessionNameInput(BaseModel):
+    session_name: str = Field(description="The name of the session")
+
+class ReadLogsInput(BaseModel):
+    last_lines: Optional[int] = Field(default=None, description="Number of last lines to read")
+
+class EventIdInput(BaseModel):
+    event_id: str = Field(description="Event ID of a technique execution event")
+
+
+# Create LangChain tools
+def create_langchain_tools():
+    """Create LangChain-compatible tools from existing functions."""
+
+    langchain_tools = [
+        StructuredTool.from_function(
+            func=execute_technique,
+            name="execute_technique",
+            description="Executes a selected attack technique. Returns execution event id, result, and output.",
+            args_schema=ExecuteTechniqueInput
+        ),
+        StructuredTool.from_function(
+            func=list_techniques,
+            name="list_techniques",
+            description="List available techniques in Halberd technique registry. Can filter by attack_surface, tactic, or technique_id.",
+            args_schema=ListTechniquesInput
+        ),
+        StructuredTool.from_function(
+            func=list_tactics,
+            name="list_tactics",
+            description="Returns a list of all tactics covered in Halberd technique registry.",
+            args_schema=ListTacticsInput
+        ),
+        StructuredTool.from_function(
+            func=get_technique_mitre_info,
+            name="get_technique_mitre_info",
+            description="Get a Halberd technique's MITRE ATT&CK mapping",
+            args_schema=TechniqueIdInput
+        ),
+        StructuredTool.from_function(
+            func=get_technique_aztrm_info,
+            name="get_technique_aztrm_info",
+            description="Get a technique's Azure Threat Research Matrix mapping",
+            args_schema=TechniqueIdInput
+        ),
+        StructuredTool.from_function(
+            func=get_technique_inputs,
+            name="get_technique_inputs",
+            description="Gets the input configuration of a particular technique.",
+            args_schema=TechniqueIdInput
+        ),
+        StructuredTool.from_function(
+            func=entra_id_get_all_tokens,
+            name="entra_id_get_all_tokens",
+            description="Returns list of all available access tokens (without refresh tokens)"
+        ),
+        StructuredTool.from_function(
+            func=entra_id_get_active_token,
+            name="entra_id_get_active_token",
+            description="Returns currently active Microsoft Entra ID access token"
+        ),
+        StructuredTool.from_function(
+            func=entra_id_get_active_token_pair,
+            name="entra_id_get_active_token_pair",
+            description="Returns currently active access token and its refresh token"
+        ),
+        StructuredTool.from_function(
+            func=entra_id_set_active_token,
+            name="entra_id_set_active_token",
+            description="Sets supplied token as active token in app",
+            args_schema=TokenInput
+        ),
+        StructuredTool.from_function(
+            func=entra_id_decode_jwt_token,
+            name="entra_id_decode_jwt_token",
+            description="Decodes MSFT JWT and returns token information",
+            args_schema=TokenInput
+        ),
+        StructuredTool.from_function(
+            func=aws_get_all_sessions,
+            name="aws_get_all_sessions",
+            description="List all established AWS sessions available currently"
+        ),
+        StructuredTool.from_function(
+            func=aws_retrieve_sessions,
+            name="aws_retrieve_sessions",
+            description="Retrieve a specific AWS session by its name",
+            args_schema=SessionNameInput
+        ),
+        StructuredTool.from_function(
+            func=aws_get_active_session,
+            name="aws_get_active_session",
+            description="Retrieve the currently active AWS session"
+        ),
+        StructuredTool.from_function(
+            func=aws_get_session_details,
+            name="aws_get_session_details",
+            description="Retrieve details about a session in JSON format"
+        ),
+        StructuredTool.from_function(
+            func=aws_set_active_session,
+            name="aws_set_active_session",
+            description="Set a session as the default/active session",
+            args_schema=SessionNameInput
+        ),
+        StructuredTool.from_function(
+            func=aws_get_connected_user_details,
+            name="aws_get_connected_user_details",
+            description="Retrieve user details from the active session"
+        ),
+        StructuredTool.from_function(
+            func=read_halberd_logs,
+            name="read_halberd_logs",
+            description="Read the contents of Halberd log file",
+            args_schema=ReadLogsInput
+        ),
+        StructuredTool.from_function(
+            func=get_technique_execution_response,
+            name="get_technique_execution_response",
+            description="Retrieves output of a previously executed technique by event_id",
+            args_schema=EventIdInput
+        ),
+        StructuredTool.from_function(
+            func=get_app_info,
+            name="get_app_info",
+            description="Retrieves application metadata and version information"
+        ),
+    ]
+
+    return langchain_tools
+
+
+# Create tool name to function mapping for execution
 tool_functions = {
-    "execute_technique":execute_technique,
-    "list_techniques":list_techniques,
-    "list_tactics":list_tactics,
+    "execute_technique": execute_technique,
+    "list_techniques": list_techniques,
+    "list_tactics": list_tactics,
     "get_technique_mitre_info": get_technique_mitre_info,
     "get_technique_aztrm_info": get_technique_aztrm_info,
     "get_technique_inputs": get_technique_inputs,
@@ -344,15 +501,18 @@ class AttackAgent:
         # Track token usage warnings
         self._token_warning_issued = False
 
-        logger.info("AttackAgent initialized")
+        # Initialize LangChain tools
+        self._langchain_tools = create_langchain_tools()
+
+        logger.info("AttackAgent initialized with LangChain")
 
     @property
-    def anthropic(self) -> Optional[Anthropic]:
+    def llm(self) -> Optional[ChatAnthropic]:
         """
-        Lazy initialization of Anthropic client that updates when API key changes.
+        Lazy initialization of LangChain ChatAnthropic that updates when API key changes.
 
         Returns:
-            Anthropic client instance or None if not available
+            ChatAnthropic instance or None if not available
         """
         load_dotenv()
         current_api_key = os.environ.get('ANTHROPIC_API_KEY')
@@ -368,17 +528,27 @@ class AttackAgent:
                     logger.warning(f"API key validation warning: {validation_result['message']}")
 
                 try:
-                    self._anthropic_client = Anthropic(timeout=API_TIMEOUT)
+                    self._anthropic_client = ChatAnthropic(
+                        model="claude-3-7-sonnet-20250219",
+                        timeout=API_TIMEOUT,
+                        max_tokens=MAX_MODEL_TOKENS,
+                        anthropic_api_key=current_api_key
+                    )
                     self._last_api_key = current_api_key
-                    logger.info("Anthropic client initialized successfully")
+                    logger.info("LangChain ChatAnthropic client initialized successfully")
                 except Exception as e:
-                    logger.error(f"Failed to initialize Anthropic client: {e}")
+                    logger.error(f"Failed to initialize ChatAnthropic client: {e}")
                     self._anthropic_client = None
             else:
                 logger.warning("ANTHROPIC_API_KEY environment variable not set")
                 self._anthropic_client = None
 
         return self._anthropic_client
+
+    @property
+    def anthropic(self) -> Optional[ChatAnthropic]:
+        """Alias for llm property for backward compatibility."""
+        return self.llm
 
     def _validate_api_key(self, api_key: str) -> Dict[str, Any]:
         """
@@ -726,13 +896,82 @@ class AttackAgent:
 
         return recent_messages
 
+    def _convert_to_langchain_messages(
+        self,
+        messages: List[Dict[str, Any]]
+    ) -> List[Union[HumanMessage, AIMessage, ToolMessage]]:
+        """
+        Convert internal message format to LangChain message types.
+
+        Args:
+            messages: List of messages in internal format
+
+        Returns:
+            List of LangChain message objects
+        """
+        langchain_messages = []
+
+        for msg in messages:
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+
+            if role == "user":
+                # Check if it's a tool result
+                if isinstance(content, list) and len(content) > 0:
+                    first_item = content[0]
+                    if isinstance(first_item, dict) and first_item.get("type") == "tool_result":
+                        # Convert tool results to ToolMessages
+                        for tool_result in content:
+                            langchain_messages.append(
+                                ToolMessage(
+                                    content=str(tool_result.get("content", "")),
+                                    tool_call_id=tool_result.get("tool_use_id", "")
+                                )
+                            )
+                    else:
+                        # Regular user message with complex content
+                        langchain_messages.append(HumanMessage(content=content))
+                else:
+                    langchain_messages.append(HumanMessage(content=str(content)))
+
+            elif role == "assistant":
+                # Handle assistant messages with potential tool calls
+                if isinstance(content, list):
+                    text_content = ""
+                    tool_calls = []
+
+                    for block in content:
+                        if isinstance(block, dict):
+                            if block.get("type") == "text":
+                                text_content += block.get("text", "")
+                            elif block.get("type") == "tool_use":
+                                tool_calls.append({
+                                    "name": block.get("name", ""),
+                                    "args": block.get("input", {}),
+                                    "id": block.get("id", "")
+                                })
+
+                    if tool_calls:
+                        ai_msg = AIMessage(
+                            content=text_content,
+                            tool_calls=tool_calls
+                        )
+                    else:
+                        ai_msg = AIMessage(content=text_content)
+
+                    langchain_messages.append(ai_msg)
+                else:
+                    langchain_messages.append(AIMessage(content=str(content)))
+
+        return langchain_messages
+
     def generate_message(
         self,
         messages: List[Dict[str, Any]],
         max_tokens: int
     ) -> Union[Any, Dict[str, str]]:
         """
-        Generate a message using Anthropic API with robust error handling.
+        Generate a message using LangChain ChatAnthropic with robust error handling.
 
         Implements:
         - Rate limiting with rolling windows
@@ -745,7 +984,7 @@ class AttackAgent:
             max_tokens: Maximum tokens for response
 
         Returns:
-            API response object or error dictionary
+            LangChain AIMessage response or error dictionary
         """
         # Check circuit breaker state
         if not self.circuit_breaker.can_execute():
@@ -804,25 +1043,22 @@ class AttackAgent:
             try:
                 call_start_time = time.time()
 
-                logger.debug(f"API call attempt {attempt + 1}/{MAX_RETRIES}")
+                logger.debug(f"LangChain API call attempt {attempt + 1}/{MAX_RETRIES}")
 
-                # Make the API call
-                response = self.anthropic.messages.create(
-                    model="claude-3-7-sonnet-20250219",
-                    system=[
-                        {
-                            "type": "text",
-                            "text": IDENTITY,
-                            "cache_control": {"type": "ephemeral"}
-                        }
-                    ],
-                    max_tokens=max_tokens,
-                    messages=messages,
-                    tools=tools,
-                )
+                # Convert messages to LangChain format
+                langchain_messages = self._convert_to_langchain_messages(messages)
 
-                # Count tokens in the actual response
-                actual_output_tokens = self.count_tokens_in_response(response)
+                # Create the LLM with tools bound
+                llm_with_tools = self.llm.bind_tools(self._langchain_tools)
+
+                # Build the prompt with system message
+                full_messages = [SystemMessage(content=IDENTITY)] + langchain_messages
+
+                # Make the API call using LangChain
+                response = llm_with_tools.invoke(full_messages)
+
+                # Estimate output tokens from response
+                actual_output_tokens = self._count_langchain_response_tokens(response)
 
                 # Track output tokens for this call
                 self.current_conversation_output_tokens += actual_output_tokens
@@ -835,7 +1071,7 @@ class AttackAgent:
                 self.circuit_breaker.record_success()
 
                 logger.debug(
-                    f"API call successful. Tokens: input={total_tokens}, output={actual_output_tokens}"
+                    f"LangChain API call successful. Tokens: input={total_tokens}, output={actual_output_tokens}"
                 )
 
                 return response
@@ -896,6 +1132,30 @@ class AttackAgent:
         # Should not reach here, but handle gracefully
         self.circuit_breaker.record_failure()
         return {"error": f"Unexpected error after retries: {str(last_error)}"}
+
+    def _count_langchain_response_tokens(self, response: AIMessage) -> int:
+        """
+        Count tokens in a LangChain AIMessage response.
+
+        Args:
+            response: LangChain AIMessage
+
+        Returns:
+            Estimated token count
+        """
+        try:
+            content = response.content or ""
+            tool_calls_str = ""
+
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                tool_calls_str = json.dumps(response.tool_calls)
+
+            combined = f"{content}\n{tool_calls_str}"
+            return self.count_tokens_for_content(combined)
+
+        except Exception as e:
+            logger.warning(f"Error counting LangChain response tokens: {e}")
+            return len(str(response.content)) // 4
     
     def process_user_input(self, user_input: Any) -> str:
         """
@@ -933,27 +1193,30 @@ class AttackAgent:
                 error_text = f"An error occurred: {response_message['error']}"
                 logger.error(error_text)
                 return error_text
-            
+
             # Keep processing tool calls until there are none left
             current_message = response_message
 
-            while any(content.type == "tool_use" for content in current_message.content):
-                # Get all tool calls in this message
-                tool_calls = [content for content in current_message.content if content.type == "tool_use"]
-                logger.info(f"Processing {len(tool_calls)} tool call(s): {[tc.name for tc in tool_calls]}")
+            # LangChain uses tool_calls attribute on AIMessage
+            while hasattr(current_message, 'tool_calls') and current_message.tool_calls:
+                tool_calls = current_message.tool_calls
+                logger.info(f"Processing {len(tool_calls)} tool call(s): {[tc['name'] for tc in tool_calls]}")
 
-                # Convert message content to serializable format before adding to history
+                # Convert LangChain message to serializable format before adding to history
                 serializable_content = []
-                for content_block in current_message.content:
-                    if content_block.type == "text":
-                        serializable_content.append({"type": "text", "text": content_block.text})
-                    elif content_block.type == "tool_use":
-                        serializable_content.append({
-                            "type": "tool_use",
-                            "id": content_block.id,
-                            "name": content_block.name,
-                            "input": content_block.input
-                        })
+
+                # Add text content if present
+                if current_message.content:
+                    serializable_content.append({"type": "text", "text": current_message.content})
+
+                # Add tool calls
+                for tc in tool_calls:
+                    serializable_content.append({
+                        "type": "tool_use",
+                        "id": tc.get("id", ""),
+                        "name": tc.get("name", ""),
+                        "input": tc.get("args", {})
+                    })
 
                 # Add the serialized message to the conversation history
                 self.session_state.messages.append(
@@ -962,10 +1225,10 @@ class AttackAgent:
 
                 # Process each tool call
                 tool_results = []
-                for tool_use in tool_calls:
-                    func_name = tool_use.name
-                    func_params = tool_use.input
-                    tool_use_id = tool_use.id
+                for tc in tool_calls:
+                    func_name = tc.get("name", "")
+                    func_params = tc.get("args", {})
+                    tool_use_id = tc.get("id", "")
 
                     # Execute tool and get result
                     result = self.handle_tool_use(func_name, func_params)
@@ -1020,21 +1283,22 @@ class AttackAgent:
                         "content": [{"type": "text", "text": error_message}]
                     })
                     return error_message
-            
-            # Extract response text from final message
-            response_text = ''.join([content.text for content in current_message.content if content.type == "text"])
 
-            # Convert final message content to serializable format
+            # Extract response text from LangChain AIMessage
+            response_text = current_message.content if hasattr(current_message, 'content') else str(current_message)
+
+            # Convert final message to serializable format
             serializable_content = []
-            for content_block in current_message.content:
-                if content_block.type == "text":
-                    serializable_content.append({"type": "text", "text": content_block.text})
-                elif content_block.type == "tool_use":
+            if current_message.content:
+                serializable_content.append({"type": "text", "text": current_message.content})
+
+            if hasattr(current_message, 'tool_calls') and current_message.tool_calls:
+                for tc in current_message.tool_calls:
                     serializable_content.append({
                         "type": "tool_use",
-                        "id": content_block.id,
-                        "name": content_block.name,
-                        "input": content_block.input
+                        "id": tc.get("id", ""),
+                        "name": tc.get("name", ""),
+                        "input": tc.get("args", {})
                     })
 
             # Add the final message to conversation history
